@@ -2,11 +2,13 @@ import sys
 import os
 
 DB_FILE = "data.db"
-store = {}
+
+# In-memory index implemented as a list of (key, value) tuples
+store = []
 
 
 def load_db():
-    """Load key-value pairs from the data.db file into memory."""
+    """Load the append-only log and rebuild the in-memory index."""
     if not os.path.exists(DB_FILE):
         return
 
@@ -16,24 +18,37 @@ def load_db():
             if len(parts) == 3 and parts[0] == "SET":
                 key = parts[1]
                 value = parts[2]
-                store[key] = value
+                set_in_memory(key, value)
+
+
+def set_in_memory(key, value):
+    """Update the in-memory list index (last write wins)."""
+    for i in range(len(store)):
+        if store[i][0] == key:
+            store[i] = (key, value)
+            return
+
+    store.append((key, value))
 
 
 def set_value(key, value):
-    """Store a key-value pair and persist it to the database file."""
-    store[key] = value
+    """Persist SET operation and update index."""
+    set_in_memory(key, value)
+
     with open(DB_FILE, "a") as f:
         f.write(f"SET {key} {value}\n")
 
 
 def get_value(key):
-    """Retrieve and print the value associated with a key."""
-    if key in store:
-        print(store[key], flush=True)
+    """Retrieve a value by scanning the in-memory list."""
+    for k, v in store:
+        if k == key:
+            print(v, flush=True)
+            return
 
 
 def main():
-    """Main command loop for the key-value store."""
+    """Main CLI loop reading commands from stdin."""
     load_db()
 
     for line in sys.stdin:
